@@ -58,7 +58,6 @@ export function usePortfolio() {
     
     const comprasETF = compras.filter(c => c.etfId === etfId);
     
-    // Conseguir la valoración más reciente de este ETF
     const valoracionesETF = valoraciones.filter(v => v.etfId === etfId).sort((a, b) => b.fechaHora.localeCompare(a.fechaHora));
     const ultimaValoracion = valoracionesETF[0];
     
@@ -66,17 +65,18 @@ export function usePortfolio() {
     const totalParticipaciones = calc.calcularTotalParticipaciones(comprasETF);
     const precioMedio = calc.calcularPrecioMedio(comprasETF);
     
-    // Si tenemos una valoración, usamos su valorTotal. Si no, tomamos el capital aportado.
     let valorActual = totalInvertido;
     let fechaUltimaValoracion = null;
+    let tieneValoracion = false;
 
     if (ultimaValoracion) {
       valorActual = ultimaValoracion.valorTotal;
       fechaUltimaValoracion = ultimaValoracion.fechaHora;
+      tieneValoracion = true;
     }
     
-    const ganancia = calc.calcularGanancia(valorActual, totalInvertido);
-    const rentabilidad = calc.calcularRentabilidad(valorActual, totalInvertido);
+    const ganancia = tieneValoracion ? calc.calcularGanancia(valorActual, totalInvertido) : null;
+    const rentabilidad = tieneValoracion ? calc.calcularRentabilidad(valorActual, totalInvertido) : null;
 
     return {
       etfId,
@@ -86,6 +86,7 @@ export function usePortfolio() {
       valorActual,
       ganancia,
       rentabilidad,
+      tieneValoracion,
       ultimaValoracion: ultimaValoracion?.valorPorParticipacion || 0,
       fechaUltimaValoracion
     };
@@ -99,6 +100,7 @@ export function usePortfolio() {
     let valorActualGlobal = 0;
     let valoracionesFaltantes = false;
     let fechaUltimaValoracionGlobal = null;
+    let tieneAlgunaValoracion = false;
 
     etfs.forEach(etf => {
       const resumen = getResumenPorETF(etf.id);
@@ -106,11 +108,12 @@ export function usePortfolio() {
         totalInvertidoGlobal += resumen.totalInvertido;
         valorActualGlobal += resumen.valorActual;
         
-        if (resumen.totalInvertido > 0 && !resumen.fechaUltimaValoracion) {
+        if (resumen.totalInvertido > 0 && !resumen.tieneValoracion) {
           valoracionesFaltantes = true;
         }
 
-        if (resumen.fechaUltimaValoracion) {
+        if (resumen.tieneValoracion) {
+          tieneAlgunaValoracion = true;
           if (!fechaUltimaValoracionGlobal || resumen.fechaUltimaValoracion > fechaUltimaValoracionGlobal) {
             fechaUltimaValoracionGlobal = resumen.fechaUltimaValoracion;
           }
@@ -118,14 +121,15 @@ export function usePortfolio() {
       }
     });
 
-    const gananciaGlobal = calc.calcularGanancia(valorActualGlobal, totalInvertidoGlobal);
-    const rentabilidadGlobal = calc.calcularRentabilidad(valorActualGlobal, totalInvertidoGlobal);
+    const gananciaGlobal = tieneAlgunaValoracion && !valoracionesFaltantes ? calc.calcularGanancia(valorActualGlobal, totalInvertidoGlobal) : (tieneAlgunaValoracion ? calc.calcularGanancia(valorActualGlobal, totalInvertidoGlobal) : null);
+    const rentabilidadGlobal = tieneAlgunaValoracion ? calc.calcularRentabilidad(valorActualGlobal, totalInvertidoGlobal) : null;
 
     return {
       totalInvertido: totalInvertidoGlobal,
       valorActual: valorActualGlobal,
       ganancia: gananciaGlobal,
       rentabilidad: rentabilidadGlobal,
+      tieneAlgunaValoracion,
       valoracionesFaltantes,
       fechaUltimaValoracion: fechaUltimaValoracionGlobal
     };

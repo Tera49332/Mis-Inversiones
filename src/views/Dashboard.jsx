@@ -76,12 +76,12 @@ export default function Dashboard({ onNavigate }) {
           {formatearMoneda(resumenGlobal.valorActual)}
         </div>
         <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px'}}>
-          <span style={{display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '20px', background: isPositive ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)', fontSize: '0.875rem', fontWeight: 600}}>
-            {isPositive ? <ArrowUpRight size={14}/> : <ArrowDownRight size={14}/>}
-            {formatearMoneda(resumenGlobal.ganancia)}
+          <span style={{display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '20px', background: isPositive ? 'rgba(16,185,129,0.2)' : (resumenGlobal.ganancia === null ? 'rgba(134, 142, 150, 0.2)' : 'rgba(239,68,68,0.2)'), fontSize: '0.875rem', fontWeight: 600}}>
+            {resumenGlobal.ganancia !== null ? (isPositive ? <ArrowUpRight size={14}/> : <ArrowDownRight size={14}/>) : null}
+            {resumenGlobal.ganancia !== null ? formatearMoneda(resumenGlobal.ganancia) : 'Estimación'}
           </span>
           <span style={{fontSize: '0.875rem', opacity: 0.85}}>
-            {formatearPorcentaje(resumenGlobal.rentabilidad)}
+            {resumenGlobal.rentabilidad !== null ? formatearPorcentaje(resumenGlobal.rentabilidad) : 'Valor actual pendiente'}
           </span>
         </div>
       </div>
@@ -92,9 +92,11 @@ export default function Dashboard({ onNavigate }) {
           <div className="stat-subtitle"><PiggyBank size={14}/> Invertido</div>
           <div className="stat-value" style={{fontSize: '1.25rem'}}>{formatearMoneda(resumenGlobal.totalInvertido)}</div>
         </div>
-        <div className={`stat-card ${isPositive ? 'profit' : 'loss'}`}>
-          <div className="stat-subtitle">{isPositive ? <TrendingUp size={14}/> : <TrendingDown size={14}/>} Ganancia</div>
-          <div className={`stat-value ${isPositive ? 'text-success' : 'text-danger'}`} style={{fontSize: '1.25rem'}}>{formatearMoneda(resumenGlobal.ganancia)}</div>
+        <div className={`stat-card ${resumenGlobal.ganancia === null ? '' : (isPositive ? 'profit' : 'loss')}`}>
+          <div className="stat-subtitle">{resumenGlobal.ganancia === null ? <Clock size={14}/> : (isPositive ? <TrendingUp size={14}/> : <TrendingDown size={14}/>)} Ganancia</div>
+          <div className={resumenGlobal.ganancia === null ? 'text-secondary' : (isPositive ? 'text-success' : 'text-danger')} style={{fontSize: '1.25rem'}}>
+            {resumenGlobal.ganancia !== null ? formatearMoneda(resumenGlobal.ganancia) : '---'}
+          </div>
         </div>
       </div>
 
@@ -115,8 +117,8 @@ export default function Dashboard({ onNavigate }) {
               </div>
               <div style={{textAlign: 'right'}}>
                 <div style={{fontWeight: 700, fontSize: '1.1rem'}}>{formatearMoneda(resumen.valorActual)}</div>
-                <div className={etfPositive ? 'text-success' : 'text-danger'} style={{fontSize: '0.8rem', fontWeight: 600}}>
-                  {etfPositive ? '+' : ''}{formatearPorcentaje(resumen.rentabilidad)}
+                <div className={resumen.ganancia === null ? 'text-secondary' : (etfPositive ? 'text-success' : 'text-danger')} style={{fontSize: '0.8rem', fontWeight: 600}}>
+                  {resumen.ganancia !== null ? (etfPositive ? '+' : '') + formatearPorcentaje(resumen.rentabilidad) : 'Sin valoración'}
                 </div>
               </div>
             </div>

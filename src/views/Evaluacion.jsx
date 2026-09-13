@@ -28,7 +28,7 @@ export default function Evaluacion() {
       fecha: new Date().toISOString(),
       periodo: periodo,
       totalInvertido: resumen.totalInvertido,
-      valorActual: resumen.valorActual,
+      valorActual: resumen.tieneAlgunaValoracion ? resumen.valorActual : null,
       rentabilidad: resumen.rentabilidad,
       notas
     })
@@ -64,12 +64,12 @@ export default function Evaluacion() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Valor actual</span>
-              <span style={{ fontWeight: 600 }}>{formatearMoneda(resumen.valorActual)}</span>
+              <span style={{ fontWeight: 600 }}>{resumen.tieneAlgunaValoracion ? formatearMoneda(resumen.valorActual) : 'Pendiente'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Rentabilidad</span>
-              <span className={resumen.rentabilidad >= 0 ? 'text-success' : 'text-danger'} style={{ fontWeight: 700 }}>
-                {formatearPorcentaje(resumen.rentabilidad)}
+              <span className={resumen.rentabilidad === null ? 'text-secondary' : (resumen.rentabilidad >= 0 ? 'text-success' : 'text-danger')} style={{ fontWeight: 700 }}>
+                {resumen.rentabilidad !== null ? formatearPorcentaje(resumen.rentabilidad) : '---'}
               </span>
             </div>
           </div>
@@ -132,12 +132,12 @@ export default function Evaluacion() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '10px' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Valor congelado</span>
-                <span style={{ fontWeight: 500 }}>{formatearMoneda(ev.valorActual)}</span>
+                <span style={{ fontWeight: 500 }}>{ev.valorActual !== null ? formatearMoneda(ev.valorActual) : 'Sin datos'}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Rentabilidad</span>
-                <span className={ev.rentabilidad >= 0 ? 'text-success' : 'text-danger'} style={{ fontWeight: 600 }}>
-                  {formatearPorcentaje(ev.rentabilidad)}
+                <span className={ev.rentabilidad === null ? 'text-secondary' : (ev.rentabilidad >= 0 ? 'text-success' : 'text-danger')} style={{ fontWeight: 600 }}>
+                  {ev.rentabilidad !== null ? formatearPorcentaje(ev.rentabilidad) : 'N/A'}
                 </span>
               </div>
               {ev.notas && (
