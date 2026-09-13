@@ -219,11 +219,30 @@ button, a, .no-select {
   height: 100%;
   color: var(--text-tertiary);
   text-decoration: none;
-  transition: color 0.2s ease;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.tab-item:active {
+  transform: scale(0.92);
 }
 
 .tab-item.active {
   color: var(--accent-primary);
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  box-shadow: 0 0 8px var(--accent-primary);
 }
 
 .tab-label {
