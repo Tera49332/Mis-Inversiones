@@ -37,6 +37,8 @@ export default function Compras() {
     })
   }, [compras, filtro, etfs])
 
+  const [editedFields, setEditedFields] = useState([])
+
   const handleFieldChange = (field, value) => {
     const safeValue = typeof value === 'string' && ['importe', 'participaciones', 'precioUnitario', 'comision', 'tipoCambioAEUR'].includes(field) 
       ? value.replace(',', '.') 
@@ -44,23 +46,38 @@ export default function Compras() {
     
     setForm(prev => {
       const next = { ...prev, [field]: safeValue }
-      
       setErrorCuadre('')
 
-      const imp = field === 'importe' ? safeValue : next.importe
-      const part = field === 'participaciones' ? safeValue : next.participaciones
-      const pre = field === 'precioUnitario' ? safeValue : next.precioUnitario
-
-      if (field !== 'importe' && part && pre && parseFloat(part) && parseFloat(pre)) {
-        const calc = calcularCampoFaltante('', part, pre)
-        if (calc) next.importe = calc
-      } else if (field !== 'participaciones' && imp && pre && parseFloat(imp) && parseFloat(pre)) {
-        const calc = calcularCampoFaltante(imp, '', pre)
-        if (calc) next.participaciones = calc
-      } else if (field !== 'precioUnitario' && imp && part && parseFloat(imp) && parseFloat(part)) {
-        const calc = calcularCampoFaltante(imp, part, '')
-        if (calc) next.precioUnitario = calc
+      // Track user edits for the 3 main fields
+      let currentEdited = [...editedFields]
+      if (['importe', 'participaciones', 'precioUnitario'].includes(field)) {
+        if (safeValue === '') {
+          currentEdited = currentEdited.filter(f => f !== field)
+        } else {
+          currentEdited = currentEdited.filter(f => f !== field)
+          currentEdited.push(field)
+          if (currentEdited.length > 2) currentEdited.shift()
+        }
       }
+
+      // Calculate the third field if we have exactly 2 edited fields
+      if (currentEdited.length === 2) {
+        const imp = parseFloat(next.importe)
+        const part = parseFloat(next.participaciones)
+        const pre = parseFloat(next.precioUnitario)
+
+        if (!currentEdited.includes('importe') && !isNaN(part) && !isNaN(pre)) {
+          next.importe = (part * pre).toFixed(2)
+        } else if (!currentEdited.includes('participaciones') && !isNaN(imp) && !isNaN(pre) && pre !== 0) {
+          next.participaciones = (imp / pre).toFixed(6)
+        } else if (!currentEdited.includes('precioUnitario') && !isNaN(imp) && !isNaN(part) && part !== 0) {
+          next.precioUnitario = (imp / part).toFixed(2)
+        }
+      }
+
+      // We need to trigger a state update for editedFields without stale closure issues, 
+      // but since we are in setForm, we can do it asynchronously here safely.
+      setTimeout(() => setEditedFields(currentEdited), 0)
 
       return next
     })
