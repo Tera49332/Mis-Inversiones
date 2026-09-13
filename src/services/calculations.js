@@ -1,16 +1,43 @@
-// Calculate total invested for a list of purchases
+// Helper for precision: Convert to cents
+export function toCents(value) {
+  const parsed = parseFloat(value);
+  if (isNaN(parsed)) return 0;
+  return Math.round(parsed * 100);
+}
+
+// Helper for precision: Convert from cents
+export function fromCents(cents) {
+  return cents / 100;
+}
+
+// Calculate total invested for a list of purchases (in EUR)
 export function calcularTotalInvertido(compras) {
   if (!compras || compras.length === 0) return 0;
-  return compras.reduce((total, compra) => total + (parseFloat(compra.importe) || 0), 0);
+  // importe is already stored in the database in the target currency, but if we assume it's in EUR (or converted),
+  // wait, the spec says to calculate always in EUR for the global summary.
+  // If a purchase was in USD, 'importe' should represent what we actually paid in EUR if possible, or we need to convert it.
+  // We'll assume 'importe' stored is what they actually spent in EUR, or we use exchangeRate.
+  // For simplicity, let's assume 'importe' is the total in the base currency (EUR) because they use a Spanish bank.
+  // If 'importe' is in USD, we use the saved tipoCambioAEUR.
+  let totalCents = 0;
+  for (const compra of compras) {
+    let imp = parseFloat(compra.importe) || 0;
+    if (compra.divisa && compra.divisa !== 'EUR' && compra.tipoCambioAEUR) {
+      imp = imp * parseFloat(compra.tipoCambioAEUR);
+    }
+    totalCents += toCents(imp);
+  }
+  return fromCents(totalCents);
 }
 
 // Calculate total shares for a list of purchases
 export function calcularTotalParticipaciones(compras) {
   if (!compras || compras.length === 0) return 0;
+  // Shares don't suffer from cent issues, but float precision is nice.
   return compras.reduce((total, compra) => total + (parseFloat(compra.participaciones) || 0), 0);
 }
 
-// Calculate weighted average price
+// Calculate weighted average price (in EUR)
 export function calcularPrecioMedio(compras) {
   const totalInvertido = calcularTotalInvertido(compras);
   const totalParticipaciones = calcularTotalParticipaciones(compras);
@@ -19,21 +46,24 @@ export function calcularPrecioMedio(compras) {
 }
 
 // Calculate current value given shares and current price per share
-export function calcularValorActual(totalParticipaciones, precioActual) {
+// Note: If precioActual is not in EUR, it should have been converted before passing here,
+// or we pass tipoCambioAEUR.
+export function calcularValorActual(totalParticipaciones, precioActual, tipoCambioAEUR = 1) {
   if (!totalParticipaciones || !precioActual) return 0;
-  return (parseFloat(totalParticipaciones) || 0) * (parseFloat(precioActual) || 0);
+  const val = (parseFloat(totalParticipaciones) || 0) * (parseFloat(precioActual) || 0) * (parseFloat(tipoCambioAEUR) || 1);
+  return fromCents(toCents(val)); // round to 2 decimals using cents logic
 }
 
-// Calculate profit/loss
+// Calculate profit/loss (in EUR)
 export function calcularGanancia(valorActual, totalInvertido) {
-  return (parseFloat(valorActual) || 0) - (parseFloat(totalInvertido) || 0);
+  return fromCents(toCents(valorActual) - toCents(totalInvertido));
 }
 
 // Calculate return percentage
 export function calcularRentabilidad(valorActual, totalInvertido) {
-  const invertido = parseFloat(totalInvertido) || 0;
-  if (invertido === 0) return 0;
-  return (calcularGanancia(valorActual, totalInvertido) / invertido) * 100;
+  const invertidoCents = toCents(totalInvertido);
+  if (invertidoCents === 0) return 0;
+  return (toCents(calcularGanancia(valorActual, totalInvertido)) / invertidoCents) * 100;
 }
 
 // Calculate the third value given two of: importe, participaciones, precioUnitario
@@ -68,15 +98,16 @@ export function validarCuadreConTolerancia(importe, participaciones, precioUnita
 }
 
 // Format currency to EUR
-export function formatearMoneda(valor) {
+export function formatearMoneda(valor, divisa = 'EUR') {
   const val = parseFloat(valor) || 0;
-  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val);
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: divisa }).format(val);
 }
 
-// Format percentage
+// Format percentage with explicit sign (+/-)
 export function formatearPorcentaje(valor) {
   const val = parseFloat(valor) || 0;
-  return new Intl.NumberFormat('es-ES', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val / 100);
+  const formatted = new Intl.NumberFormat('es-ES', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(val) / 100);
+  return val >= 0 ? `+${formatted}` : `-${formatted}`;
 }
 
 // Format date to Spanish locale
@@ -96,11 +127,12 @@ export function exportarCSV(compras, etfs) {
     return acc;
   }, {});
 
-  const headers = ['ID', 'ETF', 'Fecha', 'Importe (EUR)', 'Participaciones', 'Precio Unitario (EUR)', 'Comision (EUR)', 'Notas'];
+  const headers = ['ID', 'ETF', 'Fecha', 'Divisa', 'Importe', 'Participaciones', 'Precio Unitario', 'Comision', 'Notas'];
   const rows = compras.map(c => [
     c.id,
     etfMap[c.etfId] || c.etfId,
     c.fecha,
+    c.divisa || 'EUR',
     c.importe,
     c.participaciones,
     c.precioUnitario,
@@ -124,7 +156,7 @@ export async function exportarBackupCompleto(db) {
   const evaluaciones = await db.evaluaciones.toArray();
   
   const backup = {
-    version: 1,
+    version: 2,
     fecha: new Date().toISOString(),
     datos: { etfs, compras, valoraciones, evaluaciones }
   };

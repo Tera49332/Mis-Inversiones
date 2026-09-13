@@ -15,7 +15,8 @@ export function usePortfolio() {
       participaciones: parseFloat(compra.participaciones),
       precioUnitario: parseFloat(compra.precioUnitario),
       comision: parseFloat(compra.comision || 0),
-      divisa: compra.divisa || 'EUR'
+      divisa: compra.divisa || 'EUR',
+      tipoCambioAEUR: parseFloat(compra.tipoCambioAEUR || 1)
     });
   }
   

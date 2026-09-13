@@ -9,6 +9,8 @@ export default function Ajustes() {
   const fileInputRef = useRef(null)
 
   const [precios, setPrecios] = useState({})
+  const [divisas, setDivisas] = useState({})
+  const [tiposCambio, setTiposCambio] = useState({})
   const [saved, setSaved] = useState(false)
   const [pin, setPin] = useState('')
   const [pinMessage, setPinMessage] = useState('')
@@ -17,14 +19,24 @@ export default function Ajustes() {
     setPrecios(prev => ({ ...prev, [etfId]: valor }))
   }
 
+  const handleDivisaChange = (etfId, valor) => {
+    setDivisas(prev => ({ ...prev, [etfId]: valor }))
+  }
+
+  const handleTipoCambioChange = (etfId, valor) => {
+    setTiposCambio(prev => ({ ...prev, [etfId]: valor }))
+  }
+
   const handleUpdateValuations = async () => {
     for (const etf of (etfs || [])) {
       if (precios[etf.id] && parseFloat(precios[etf.id]) > 0) {
-        // Guarda valoración con fecha histórica automáticamente
-        await actualizarValoracion(etf.id, parseFloat(precios[etf.id]), etf.divisaCotizacion)
+        const divisa = divisas[etf.id] || etf.divisaCotizacion || 'EUR'
+        const cambio = divisa === 'EUR' ? 1 : parseFloat(tiposCambio[etf.id] || 1)
+        await actualizarValoracion(etf.id, parseFloat(precios[etf.id]), divisa, cambio, 'Manual')
       }
     }
     setPrecios({})
+    setTiposCambio({})
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }
@@ -69,7 +81,7 @@ export default function Ajustes() {
       }
       reader.readAsText(file)
     }
-    e.target.value = null // reset input
+    e.target.value = null
   }
 
   const handleClearData = async () => {
@@ -78,7 +90,6 @@ export default function Ajustes() {
         await db.compras.clear()
         await db.valoraciones.clear()
         await db.evaluaciones.clear()
-        // No borramos ETFs ni configuración de PIN
         alert('Datos borrados. Se conservan los ETFs y la configuración del PIN.')
         window.location.reload()
       }
@@ -103,52 +114,84 @@ export default function Ajustes() {
       {/* Valoración Actual */}
       <div className="settings-section">
         <h3 className="settings-title">
-          <RefreshCw size={18} style={{ color: 'var(--accent-primary)' }} /> Actualizar Precios
+          <RefreshCw size={18} style={{ color: 'var(--accent-primary)' }} aria-hidden="true" /> Actualizar Precios
         </h3>
         <p className="settings-description">
           Añade una nueva cotización histórica para proyectarla en los gráficos.
         </p>
         {etfs && etfs.map(etf => {
           const resumen = getResumenPorETF(etf.id)
+          const divisaSeleccionada = divisas[etf.id] || etf.divisaCotizacion || 'EUR'
           return (
-            <div key={etf.id} className="settings-row" style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '12px' }}>
-              <div>
-                <div className="settings-label">{etf.ticker}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                  Último: {resumen?.ultimaValoracion ? `€${resumen.ultimaValoracion}` : 'Sin datos'}
+            <div key={etf.id} className="settings-row" style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '16px', borderBottom: '1px solid var(--border-glass)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div className="settings-label">{etf.ticker}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                    Último: {resumen?.ultimaValoracion ? `${resumen.ultimaValoracion}` : 'Sin datos'}
+                  </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>€</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="settings-input"
-                  placeholder="0.00"
-                  value={precios[etf.id] || ''}
-                  onChange={e => handlePrecioChange(etf.id, e.target.value)}
-                  style={{ width: '100%' }}
-                />
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label htmlFor={`divisa-${etf.id}`} style={{fontSize: '0.7rem', color: 'var(--text-secondary)'}}>Divisa</label>
+                  <select id={`divisa-${etf.id}`} className="form-select" style={{padding: '8px'}} value={divisaSeleccionada} onChange={e => handleDivisaChange(etf.id, e.target.value)}>
+                    <option value="EUR">EUR</option>
+                    <option value="USD">USD</option>
+                    <option value="GBP">GBP</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor={`precio-${etf.id}`} style={{fontSize: '0.7rem', color: 'var(--text-secondary)'}}>Precio ({divisaSeleccionada})</label>
+                  <input
+                    id={`precio-${etf.id}`}
+                    type="text"
+                    inputMode="decimal"
+                    className="settings-input"
+                    placeholder="0.00"
+                    value={precios[etf.id] || ''}
+                    onChange={e => handlePrecioChange(etf.id, e.target.value.replace(',', '.'))}
+                    style={{ width: '100%', padding: '8px' }}
+                  />
+                </div>
               </div>
+
+              {divisaSeleccionada !== 'EUR' && (
+                <div>
+                  <label htmlFor={`cambio-${etf.id}`} style={{fontSize: '0.7rem', color: 'var(--text-secondary)'}}>Tipo de cambio a EUR</label>
+                  <input
+                    id={`cambio-${etf.id}`}
+                    type="text"
+                    inputMode="decimal"
+                    className="settings-input"
+                    placeholder="Ej: 0.91"
+                    value={tiposCambio[etf.id] || ''}
+                    onChange={e => handleTipoCambioChange(etf.id, e.target.value.replace(',', '.'))}
+                    style={{ width: '100%', padding: '8px' }}
+                  />
+                </div>
+              )}
             </div>
           )
         })}
         <button className="btn btn-primary btn-full" onClick={handleUpdateValuations} style={{ marginTop: '16px' }}>
           Guardar Cotizaciones
         </button>
-        {saved && <p style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--success)', textAlign: 'center' }}>✓ Histórico guardado</p>}
+        {saved && <p style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--success)', textAlign: 'center' }} role="status">✓ Histórico guardado</p>}
       </div>
 
       {/* Seguridad */}
       <div className="settings-section">
         <h3 className="settings-title">
-          <Shield size={18} style={{ color: 'var(--accent-primary)' }} /> Seguridad
+          <Shield size={18} style={{ color: 'var(--accent-primary)' }} aria-hidden="true" /> Seguridad
         </h3>
         <form onSubmit={handleChangePin}>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Cambiar PIN de acceso</label>
+            <label htmlFor="pin-input" className="form-label">Cambiar PIN de acceso</label>
             <div style={{ display: 'flex', gap: '8px' }}>
               <input 
+                id="pin-input"
                 type="password" 
                 inputMode="numeric"
                 maxLength="4"
@@ -163,22 +206,22 @@ export default function Ajustes() {
               </button>
             </div>
           </div>
-          {pinMessage && <p style={{marginTop: '8px', fontSize: '0.8rem', color: pinMessage.includes('correctamente') ? 'var(--success)' : 'var(--danger)'}}>{pinMessage}</p>}
+          {pinMessage && <p style={{marginTop: '8px', fontSize: '0.8rem', color: pinMessage.includes('correctamente') ? 'var(--success)' : 'var(--danger)'}} role="alert">{pinMessage}</p>}
         </form>
       </div>
 
       {/* Copias de seguridad */}
       <div className="settings-section">
         <h3 className="settings-title">
-          <Download size={18} style={{ color: 'var(--accent-primary)' }} /> Copias de Seguridad
+          <Download size={18} style={{ color: 'var(--accent-primary)' }} aria-hidden="true" /> Copias de Seguridad
         </h3>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
           <button className="btn btn-secondary btn-full" onClick={handleExportCSV}>
-            <Download size={16} /> Exportar Compras (CSV)
+            <Download size={16} aria-hidden="true" /> Exportar Compras (CSV)
           </button>
           <button className="btn btn-primary btn-full" onClick={handleExportJSON}>
-            <Download size={16} /> Exportar Backup Completo (JSON)
+            <Download size={16} aria-hidden="true" /> Exportar Backup Completo (JSON)
           </button>
           
           <div style={{ height: '1px', background: 'var(--border-glass)', margin: '8px 0' }} />
@@ -189,9 +232,10 @@ export default function Ajustes() {
             ref={fileInputRef} 
             onChange={handleImportJSON} 
             style={{ display: 'none' }} 
+            aria-label="Seleccionar archivo JSON para importar"
           />
           <button className="btn btn-secondary btn-full" onClick={() => fileInputRef.current?.click()}>
-            <Upload size={16} /> Importar Backup (JSON)
+            <Upload size={16} aria-hidden="true" /> Importar Backup (JSON)
           </button>
         </div>
       </div>
@@ -199,13 +243,13 @@ export default function Ajustes() {
       {/* Zona Peligrosa */}
       <div className="settings-section danger-zone">
         <h3 className="settings-title" style={{ color: 'var(--danger)' }}>
-          <Trash2 size={18} /> Zona Peligrosa
+          <Trash2 size={18} aria-hidden="true" /> Zona Peligrosa
         </h3>
         <p className="settings-description">
           Borrar todos los datos de compras, gráficos y evaluaciones de la aplicación.
         </p>
         <button className="btn btn-danger btn-full" onClick={handleClearData}>
-          <AlertTriangle size={16} /> Eliminar mi cartera
+          <AlertTriangle size={16} aria-hidden="true" /> Eliminar mi cartera
         </button>
       </div>
     </div>

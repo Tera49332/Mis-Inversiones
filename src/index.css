@@ -85,6 +85,11 @@ button, a, .no-select {
     --text-primary: #212529;
     --text-secondary: #495057;
     --text-tertiary: #868e96;
+    
+    --accent-primary: #4f46e5;
+    --success: #059669;
+    --danger: #dc2626;
+    --warning: #d97706;
   }
 }
 
