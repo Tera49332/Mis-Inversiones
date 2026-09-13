@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { TrendingUp, TrendingDown, Wallet, PiggyBank, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { TrendingUp, TrendingDown, Wallet, PiggyBank, ArrowUpRight, ArrowDownRight, Clock, AlertTriangle } from 'lucide-react'
 import { usePortfolio } from '../hooks/usePortfolio'
-import { formatearMoneda, formatearPorcentaje } from '../services/calculations'
+import { formatearMoneda, formatearPorcentaje, formatearFecha } from '../services/calculations'
 
 export default function Dashboard({ onNavigate }) {
   const { etfs, compras, getResumenGlobal, getResumenPorETF, getDatosGrafico, isLoading } = usePortfolio()
@@ -25,7 +25,7 @@ export default function Dashboard({ onNavigate }) {
   if (!compras || compras.length === 0) {
     return (
       <div className="animate-fade-in">
-        <h2 style={{fontSize: '1.5rem', fontWeight: 700, marginBottom: '2rem', color: 'var(--text-primary)'}}>{greeting}</h2>
+        <div style={{fontSize: '1.2rem', color: 'var(--text-secondary)', marginBottom: '1.5rem'}}>{greeting}</div>
         <div className="empty-state">
           <PiggyBank size={56} className="empty-icon" />
           <h3 className="empty-title">Sin inversiones aún</h3>
@@ -38,15 +38,39 @@ export default function Dashboard({ onNavigate }) {
     )
   }
 
+  // Comprobar si hay valoraciones antiguas (más de 30 días)
+  const hoy = new Date();
+  let diasUltimaValoracion = 0;
+  if (resumenGlobal?.fechaUltimaValoracion) {
+    const fechaVal = new Date(resumenGlobal.fechaUltimaValoracion);
+    diasUltimaValoracion = Math.floor((hoy - fechaVal) / (1000 * 60 * 60 * 24));
+  }
+
   return (
     <div className="animate-fade-in">
-      <h2 style={{fontSize: '1.5rem', fontWeight: 700, marginBottom: '1.5rem', color: 'var(--text-primary)'}}>{greeting}</h2>
+      <div style={{fontSize: '1.2rem', color: 'var(--text-secondary)', marginBottom: '1.5rem'}}>{greeting}</div>
       
+      {resumenGlobal.valoracionesFaltantes || diasUltimaValoracion > 30 ? (
+        <div className="card" style={{background: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.3)', padding: '12px 16px', marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center'}}>
+          <AlertTriangle size={24} style={{color: 'var(--warning)', flexShrink: 0}} />
+          <div style={{fontSize: '0.875rem', color: 'var(--text-primary)'}}>
+            Tienes compras registradas, pero {resumenGlobal.fechaUltimaValoracion ? `la última valoración es de hace ${diasUltimaValoracion} días.` : 'no tienes valoraciones registradas.'} Actualiza precios en Ajustes.
+          </div>
+        </div>
+      ) : null}
+
       {/* Main value card */}
       <div className="card" style={{background: 'var(--accent-gradient)', border: 'none', marginBottom: '20px'}}>
-        <div style={{display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', opacity: 0.85}}>
-          <Wallet size={16} />
-          <span style={{fontSize: '0.875rem'}}>Valor de tu cartera</span>
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', opacity: 0.85}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
+            <Wallet size={16} />
+            <span style={{fontSize: '0.875rem'}}>Valor de tu cartera</span>
+          </div>
+          {resumenGlobal.fechaUltimaValoracion && (
+            <div style={{display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem'}}>
+              <Clock size={12} /> {formatearFecha(resumenGlobal.fechaUltimaValoracion.split('T')[0])}
+            </div>
+          )}
         </div>
         <div style={{fontSize: '2rem', fontWeight: 800, letterSpacing: '-0.02em'}}>
           {formatearMoneda(resumenGlobal.valorActual)}
@@ -74,32 +98,8 @@ export default function Dashboard({ onNavigate }) {
         </div>
       </div>
 
-      {/* Chart */}
-      {datosGrafico.length > 1 && (
-        <div className="card" style={{marginBottom: '20px'}}>
-          <h3 style={{fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '16px'}}>Evolución del Portfolio</h3>
-          <div style={{width: '100%', height: 180}}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={datosGrafico}>
-                <defs>
-                  <linearGradient id="colorInvertido" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
-                <XAxis dataKey="fecha" tick={{fontSize: 10, fill: 'var(--text-tertiary)'}} tickLine={false} axisLine={false} />
-                <YAxis tick={{fontSize: 10, fill: 'var(--text-tertiary)'}} tickLine={false} axisLine={false} width={50} tickFormatter={(v) => `€${(v/1000).toFixed(1)}k`} />
-                <Tooltip formatter={(value) => formatearMoneda(value)} contentStyle={{background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem'}} />
-                <Area type="monotone" dataKey="invertido" stroke="#6366f1" fillOpacity={1} fill="url(#colorInvertido)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
       {/* ETF Breakdown */}
-      <h3 style={{fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '12px'}}>Mis ETFs</h3>
+      <h3 className="section-title">Mis ETFs</h3>
       {etfs && etfs.map(etf => {
         const resumen = getResumenPorETF(etf.id)
         if (!resumen || resumen.totalInvertido === 0) return null
@@ -122,7 +122,7 @@ export default function Dashboard({ onNavigate }) {
             </div>
             <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-glass)', fontSize: '0.8rem', color: 'var(--text-secondary)'}}>
               <span>Invertido: {formatearMoneda(resumen.totalInvertido)}</span>
-              <span>{resumen.totalParticipaciones.toFixed(4)} part.</span>
+              <span>{resumen.totalParticipaciones.toFixed(4)} part. | Medio: {formatearMoneda(resumen.precioMedio)}</span>
             </div>
           </div>
         )

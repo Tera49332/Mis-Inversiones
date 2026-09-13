@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react'
-import { Plus, X, Trash2 } from 'lucide-react'
+import { Plus, X, Trash2, PiggyBank, AlertCircle, Info } from 'lucide-react'
 import { usePortfolio } from '../hooks/usePortfolio'
-import { calcularCampoFaltante, formatearMoneda, formatearFecha } from '../services/calculations'
+import { calcularCampoFaltante, formatearMoneda, formatearFecha, validarCuadreConTolerancia } from '../services/calculations'
 
 export default function Compras() {
   const { etfs, compras, agregarCompra, eliminarCompra, isLoading } = usePortfolio()
   const [showSheet, setShowSheet] = useState(false)
   const [filtro, setFiltro] = useState('all')
+  const [errorCuadre, setErrorCuadre] = useState('')
   const today = new Date().toISOString().split('T')[0]
 
   const [form, setForm] = useState({
@@ -19,7 +20,6 @@ export default function Compras() {
     notas: ''
   })
 
-  // Set default ETF when loaded
   useMemo(() => {
     if (etfs && etfs.length > 0 && !form.etfId) {
       setForm(f => ({ ...f, etfId: etfs[0].id }))
@@ -36,12 +36,17 @@ export default function Compras() {
   }, [compras, filtro, etfs])
 
   const handleFieldChange = (field, value) => {
+    // Allow both comma and dot for decimals, convert comma to dot internally
+    const safeValue = typeof value === 'string' ? value.replace(',', '.') : value;
+    
     setForm(prev => {
-      const next = { ...prev, [field]: value }
+      const next = { ...prev, [field]: safeValue }
+      
+      setErrorCuadre('') // Limpiar error al editar
 
-      const imp = field === 'importe' ? value : next.importe
-      const part = field === 'participaciones' ? value : next.participaciones
-      const pre = field === 'precioUnitario' ? value : next.precioUnitario
+      const imp = field === 'importe' ? safeValue : next.importe
+      const part = field === 'participaciones' ? safeValue : next.participaciones
+      const pre = field === 'precioUnitario' ? safeValue : next.precioUnitario
 
       if (field !== 'importe' && part && pre && parseFloat(part) && parseFloat(pre)) {
         const calc = calcularCampoFaltante('', part, pre)
@@ -60,6 +65,16 @@ export default function Compras() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    // Validate rounding tolerance
+    if (form.importe && form.participaciones && form.precioUnitario) {
+      const esValido = validarCuadreConTolerancia(form.importe, form.participaciones, form.precioUnitario, form.comision);
+      if (!esValido) {
+        setErrorCuadre('Los datos no cuadran. Revisa el importe, las participaciones y el precio de ejecución.')
+        return
+      }
+    }
+
     await agregarCompra({
       etfId: parseInt(form.etfId) || form.etfId,
       fecha: form.fecha,
@@ -69,8 +84,11 @@ export default function Compras() {
       comision: form.comision || '0',
       notas: form.notas
     })
+    
     setForm({ etfId: etfs?.[0]?.id || '', fecha: today, importe: '', participaciones: '', precioUnitario: '', comision: '', notas: '' })
+    setErrorCuadre('')
     setShowSheet(false)
+    alert('Compra registrada correctamente')
   }
 
   const handleDelete = (id) => {
@@ -85,7 +103,6 @@ export default function Compras() {
 
   return (
     <div className="animate-fade-in">
-      {/* Filter tabs */}
       <div className="filter-tabs">
         <button className={`filter-tab ${filtro === 'all' ? 'active' : ''}`} onClick={() => setFiltro('all')}>Todas</button>
         {etfs && etfs.map(etf => (
@@ -95,12 +112,14 @@ export default function Compras() {
         ))}
       </div>
 
-      {/* Purchases list */}
       {comprasFiltradas.length === 0 ? (
         <div className="empty-state">
-          <Plus size={48} className="empty-icon" />
+          <PiggyBank size={56} className="empty-icon" />
           <h3 className="empty-title">Sin compras registradas</h3>
-          <p className="empty-message">Pulsa el botón + para registrar tu primera compra de ETF</p>
+          <p className="empty-message">Introduce los datos del justificante de tu bróker (ej: Trade Republic)</p>
+          <button className="btn btn-primary" onClick={() => setShowSheet(true)} style={{marginTop: '12px'}}>
+            Añadir primera inversión
+          </button>
         </div>
       ) : (
         <div className="list">
@@ -117,7 +136,8 @@ export default function Compras() {
                   <div className="list-item-subtitle">
                     {parseFloat(compra.participaciones).toFixed(4)} part. × {formatearMoneda(compra.precioUnitario)}
                   </div>
-                  {compra.notas && <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '4px', fontStyle: 'italic' }}>{compra.notas}</div>}
+                  {compra.comision > 0 && <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Comisión: {formatearMoneda(compra.comision)}</div>}
+                  {compra.notas && <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px', fontStyle: 'italic' }}>{compra.notas}</div>}
                 </div>
                 <button className="btn btn-danger" style={{ padding: '8px', borderRadius: '10px' }} onClick={() => handleDelete(compra.id)}>
                   <Trash2 size={16} />
@@ -128,20 +148,26 @@ export default function Compras() {
         </div>
       )}
 
-      {/* FAB */}
-      <button className="fab" onClick={() => setShowSheet(true)}>
-        <Plus size={24} />
-      </button>
+      {comprasFiltradas.length > 0 && (
+        <button className="fab" onClick={() => setShowSheet(true)}>
+          <Plus size={24} />
+        </button>
+      )}
 
-      {/* Bottom Sheet */}
+      {/* Bottom Sheet Modal */}
       <div className={`sheet-overlay ${showSheet ? 'open' : ''}`} onClick={() => setShowSheet(false)}>
-        <div className="sheet-content" onClick={e => e.stopPropagation()}>
+        <div className="sheet-content" onClick={e => e.stopPropagation()} style={{maxHeight: '90vh', overflowY: 'auto'}}>
           <div className="sheet-handle" />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)' }}>Nueva Compra</h3>
             <button className="header-action" onClick={() => setShowSheet(false)}>
               <X size={20} />
             </button>
+          </div>
+          
+          <div style={{background: 'rgba(99, 102, 241, 0.1)', padding: '12px', borderRadius: '12px', display: 'flex', gap: '8px', marginBottom: '16px'}}>
+            <Info size={16} style={{color: 'var(--accent-primary)', flexShrink: 0, marginTop: '2px'}}/>
+            <p style={{fontSize: '0.8rem', color: 'var(--text-primary)'}}>Introduce los datos del justificante de Trade Republic. Usa punto o coma para los decimales.</p>
           </div>
 
           <form onSubmit={handleSubmit}>
@@ -149,7 +175,7 @@ export default function Compras() {
               <label className="form-label">ETF</label>
               <select className="form-select" value={form.etfId} onChange={e => handleFieldChange('etfId', e.target.value)}>
                 {etfs && etfs.map(etf => (
-                  <option key={etf.id} value={etf.id}>{etf.ticker} — {etf.nombre}</option>
+                  <option key={etf.id} value={etf.id}>{etf.ticker} — {etf.nombre} ({etf.isin || 'Sin ISIN'})</option>
                 ))}
               </select>
             </div>
@@ -161,23 +187,23 @@ export default function Compras() {
 
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Importe (€)</label>
-                <input type="number" step="0.01" className="form-input" placeholder="0.00" value={form.importe} onChange={e => handleFieldChange('importe', e.target.value)} />
+                <label className="form-label">Importe total (€)</label>
+                <input type="text" inputMode="decimal" className="form-input" placeholder="0.00" value={form.importe} onChange={e => handleFieldChange('importe', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Participaciones</label>
-                <input type="number" step="0.0001" className="form-input" placeholder="0.0000" value={form.participaciones} onChange={e => handleFieldChange('participaciones', e.target.value)} />
+                <input type="text" inputMode="decimal" className="form-input" placeholder="0.0000" value={form.participaciones} onChange={e => handleFieldChange('participaciones', e.target.value)} />
               </div>
             </div>
 
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Precio unitario (€)</label>
-                <input type="number" step="0.01" className="form-input" placeholder="0.00" value={form.precioUnitario} onChange={e => handleFieldChange('precioUnitario', e.target.value)} />
+                <input type="text" inputMode="decimal" className="form-input" placeholder="0.00" value={form.precioUnitario} onChange={e => handleFieldChange('precioUnitario', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Comisión (€)</label>
-                <input type="number" step="0.01" className="form-input" placeholder="0.00" value={form.comision} onChange={e => handleFieldChange('comision', e.target.value)} />
+                <input type="text" inputMode="decimal" className="form-input" placeholder="0.00" value={form.comision} onChange={e => handleFieldChange('comision', e.target.value)} />
               </div>
             </div>
 
@@ -186,8 +212,15 @@ export default function Compras() {
               <input type="text" className="form-input" placeholder="Ej: Aportación mensual" value={form.notas} onChange={e => handleFieldChange('notas', e.target.value)} />
             </div>
 
-            <button type="submit" className="btn btn-primary btn-full" style={{ marginTop: '8px' }}>
-              Guardar Compra
+            {errorCuadre && (
+              <div style={{background: 'rgba(239, 68, 68, 0.1)', padding: '12px', borderRadius: '12px', display: 'flex', gap: '8px', marginTop: '8px'}}>
+                <AlertCircle size={16} style={{color: 'var(--danger)', flexShrink: 0, marginTop: '2px'}}/>
+                <p style={{fontSize: '0.8rem', color: 'var(--danger)'}}>{errorCuadre}</p>
+              </div>
+            )}
+
+            <button type="submit" className="btn btn-primary btn-full" style={{ marginTop: '16px' }}>
+              Confirmar Registro
             </button>
           </form>
         </div>

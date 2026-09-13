@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ClipboardCheck, Calendar, TrendingUp, MessageSquare } from 'lucide-react'
+import { ClipboardCheck, Calendar, TrendingUp, MessageSquare, Clock } from 'lucide-react'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { formatearMoneda, formatearPorcentaje, formatearFecha } from '../services/calculations'
 import { db } from '../db/database'
@@ -8,6 +8,7 @@ export default function Evaluacion() {
   const { getResumenGlobal, isLoading } = usePortfolio()
   const [evaluaciones, setEvaluaciones] = useState([])
   const [notas, setNotas] = useState('')
+  const [periodo, setPeriodo] = useState('Seis meses')
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
@@ -25,6 +26,7 @@ export default function Evaluacion() {
     if (!resumen) return
     await db.evaluaciones.add({
       fecha: new Date().toISOString(),
+      periodo: periodo,
       totalInvertido: resumen.totalInvertido,
       valorActual: resumen.valorActual,
       rentabilidad: resumen.rentabilidad,
@@ -40,8 +42,14 @@ export default function Evaluacion() {
     return <div className="empty-state"><div className="empty-message">Cargando...</div></div>
   }
 
+  const labelPregunta = periodo === 'Inicial' ? '¿Qué esperas de esta cartera a futuro?' :
+                        periodo === 'Mensual' ? '¿Cómo ha ido este mes?' :
+                        periodo === 'Seis meses' ? '¿Cómo ha ido este periodo de seis meses?' : 
+                        '¿Cómo ha ido este año?';
+
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in" style={{ paddingBottom: '80px' }}>
+      
       {/* New Evaluation */}
       <div className="card" style={{ marginBottom: '24px' }}>
         <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -49,7 +57,7 @@ export default function Evaluacion() {
         </h3>
 
         {resumen && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-glass)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Total invertido</span>
               <span style={{ fontWeight: 600 }}>{formatearMoneda(resumen.totalInvertido)}</span>
@@ -68,13 +76,23 @@ export default function Evaluacion() {
         )}
 
         <div className="form-group">
+          <label className="form-label">Tipo de evaluación</label>
+          <select className="form-select" value={periodo} onChange={e => setPeriodo(e.target.value)}>
+            <option value="Inicial">Inicial (antes de primera compra)</option>
+            <option value="Mensual">Mensual (opcional)</option>
+            <option value="Seis meses">Seis meses</option>
+            <option value="Anual">Anual</option>
+          </select>
+        </div>
+
+        <div className="form-group">
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <MessageSquare size={14} /> Notas de evaluación
+            <MessageSquare size={14} /> {labelPregunta}
           </label>
           <textarea
             className="form-input"
             rows="3"
-            placeholder="¿Cómo ha ido este semestre? ¿Cambios de estrategia?"
+            placeholder="¿Te sientes cómodo con la volatilidad? ¿Has aprendido algo nuevo?"
             value={notas}
             onChange={e => setNotas(e.target.value)}
             style={{ resize: 'vertical' }}
@@ -82,19 +100,19 @@ export default function Evaluacion() {
         </div>
 
         <button className="btn btn-primary btn-full" onClick={handleSave} style={{ marginTop: '8px' }}>
-          Guardar Snapshot
+          Guardar Snapshot Congelado
         </button>
-        {saved && <p style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--success)', textAlign: 'center' }}>✓ Evaluación guardada</p>}
+        {saved && <p style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--success)', textAlign: 'center' }}>✓ Evaluación guardada correctamente</p>}
       </div>
 
       {/* Timeline */}
-      <h3 className="section-title">Historial de Evaluaciones</h3>
+      <h3 className="section-title">Revisión del plan (Histórico)</h3>
 
       {evaluaciones.length === 0 ? (
         <div className="empty-state">
           <ClipboardCheck size={48} className="empty-icon" />
           <h3 className="empty-title">Sin evaluaciones</h3>
-          <p className="empty-message">Guarda instantáneas periódicas de tu cartera para hacer seguimiento a largo plazo</p>
+          <p className="empty-message">Guarda instantáneas periódicas de tu cartera para hacer seguimiento a largo plazo de tus emociones y estrategia</p>
         </div>
       ) : (
         <div className="eval-timeline">
@@ -104,17 +122,27 @@ export default function Evaluacion() {
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                   <Calendar size={14} /> {formatearFecha(ev.fecha)}
                 </span>
-                <span className={ev.rentabilidad >= 0 ? 'text-success' : 'text-danger'} style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <TrendingUp size={14} /> {formatearPorcentaje(ev.rentabilidad)}
+                <span className="badge" style={{ background: 'var(--bg-tertiary)' }}>
+                  {ev.periodo || 'Seis meses'}
                 </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                <span>Inv: {formatearMoneda(ev.totalInvertido)}</span>
-                <span>Val: {formatearMoneda(ev.valorActual)}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '10px' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Capital aportado</span>
+                <span style={{ fontWeight: 500 }}>{formatearMoneda(ev.totalInvertido)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '10px' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Valor congelado</span>
+                <span style={{ fontWeight: 500 }}>{formatearMoneda(ev.valorActual)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Rentabilidad</span>
+                <span className={ev.rentabilidad >= 0 ? 'text-success' : 'text-danger'} style={{ fontWeight: 600 }}>
+                  {formatearPorcentaje(ev.rentabilidad)}
+                </span>
               </div>
               {ev.notas && (
-                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-glass)', fontSize: '0.8rem', fontStyle: 'italic', color: 'var(--text-secondary)' }}>
-                  {ev.notas}
+                <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-glass)', fontSize: '0.85rem', fontStyle: 'italic', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                  "{ev.notas}"
                 </div>
               )}
             </div>

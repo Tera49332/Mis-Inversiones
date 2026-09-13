@@ -54,6 +54,19 @@ export function calcularCampoFaltante(importe, participaciones, precioUnitario) 
   return null;
 }
 
+// Validate rounding tolerance between importe and (participaciones * precioUnitario) + comision
+export function validarCuadreConTolerancia(importe, participaciones, precioUnitario, comision, tolerancia = 0.05) {
+  const imp = parseFloat(importe) || 0;
+  const part = parseFloat(participaciones) || 0;
+  const precio = parseFloat(precioUnitario) || 0;
+  const comi = parseFloat(comision) || 0;
+
+  const calculado = (part * precio) + comi;
+  const diferencia = Math.abs(imp - calculado);
+  
+  return diferencia <= tolerancia;
+}
+
 // Format currency to EUR
 export function formatearMoneda(valor) {
   const val = parseFloat(valor) || 0;
@@ -100,11 +113,31 @@ export function exportarCSV(compras, etfs) {
     ...rows.map(r => r.join(','))
   ].join('\n');
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  downloadFile(csvContent, `exportacion_compras_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+}
+
+// Export Full JSON Backup
+export async function exportarBackupCompleto(db) {
+  const etfs = await db.etfs.toArray();
+  const compras = await db.compras.toArray();
+  const valoraciones = await db.valoraciones.toArray();
+  const evaluaciones = await db.evaluaciones.toArray();
+  
+  const backup = {
+    version: 1,
+    fecha: new Date().toISOString(),
+    datos: { etfs, compras, valoraciones, evaluaciones }
+  };
+  
+  downloadFile(JSON.stringify(backup, null, 2), `backup_mi_inversion_etf_${new Date().toISOString().split('T')[0]}.json`, 'application/json;charset=utf-8;');
+}
+
+function downloadFile(content, fileName, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.setAttribute('href', url);
-  link.setAttribute('download', `exportacion_compras_${new Date().toISOString().split('T')[0]}.csv`);
+  link.setAttribute('download', fileName);
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();
